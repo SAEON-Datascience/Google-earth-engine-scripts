@@ -1,0 +1,85 @@
+var ROI = 
+    /* color: #0b4a8b */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[23.12400462658752, -34.0482487741101],
+          [23.12400462658752, -34.04967109064138],
+          [23.127609515503536, -34.04967109064138],
+          [23.127609515503536, -34.0482487741101]]], null, false);
+          
+//Zoom to target location
+Map.centerObject(ROI, 11);
+
+//Create Start and End Dates
+var start = ee.Date('2018-10-25');
+var end = ee.Date('2018-10-30');
+
+//Define some functions for sentinel 2
+var addFire = function (image) {
+  var fire = image.normalizedDifference(['B12', 'B2']).rename('FIRE');
+  return image.addBands(fire);
+};
+
+var addMask = function (image) {
+  var mask = image.select(['FIRE']).gte(0.6);
+  return image.updateMask(mask);
+};
+
+//Filter the sentinel 2 image collection
+var col = ee.ImageCollection("COPERNICUS/S2")
+          .filterDate(start, end)
+          .filterBounds(ROI)
+          .map(addFire);
+          
+var scene = ee.Image(col.first());
+print(scene);
+
+var firemasked = ee.Image(col.map(addMask)
+                              .first());
+
+
+var visParams = {bands: ['B4', 'B3', 'B2'], max: 3000};
+
+var fireParams2 = {bands: ['B12'], min:20000, max:23000};
+var FireParams = {
+  bands: ['FIRE'],
+  min: 0.6,
+  max: 1,
+  palette: ['Red', 'Orange', 'yellow']
+};
+
+var MODfireMaskVis = {
+  min: 0.0,
+  max: 6000.0,
+  bands: ['MaxFRP', 'FireMask', 'FireMask'],
+};
+
+Map.addLayer(scene, visParams, 'RGB');
+
+// MODIS fire product for validation
+
+// Filter the image collection
+var ModFire = ee.ImageCollection("MODIS/006/MOD14A1")
+          .filterDate(start, end)
+          .filterBounds(ROI)
+          .first();
+print(ModFire);
+Map.addLayer(ModFire, MODfireMaskVis, 'Fire Mask');
+Map.addLayer(firemasked, FireParams, 'FIRE masked');
+
+//var histogram = fire.select(['FIRE']).reduceRegion({
+// reducer: ee.Reducer.histogram(255, 2)
+//     .combine('mean', null, true)
+//     .combine('variance', null, true),
+// geometry: ROI,
+// scale: 30,
+// bestEffort: true
+//});
+//print(histogram);
+
+// Chart the histogram
+//print(Chart.image.histogram(fire.select(['FIRE']), ROI, 30));
