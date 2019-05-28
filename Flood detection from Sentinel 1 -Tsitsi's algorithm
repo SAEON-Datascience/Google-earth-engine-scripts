@@ -1,0 +1,67 @@
+//Select ROI
+var ROI = ee.Geometry.Rectangle([24.35, -17.87, 25.25, -17.40]); //Caprivi area
+Map.centerObject(ROI); //zoom level can be indicated by adding as a number, e.g. Map.centerObject(ROI,10)
+print(ROI);
+Map.addLayer(ROI,{color:'white'},'ROI');
+// Load the image from the archive.
+var image = ee.Image('COPERNICUS/S1_GRD/S1B_IW_GRDH_1SDV_20170406T164808_20170406T164833_005042_008D17_D7DE');
+
+// Define visualization parameters in an object literal.
+//var vizParams = {bands: ['VV', 'VH', 'VV'], min: 5000, max: 15000, gamma: 1.3};
+var bands_vis = 'VV,VH,VV'; 
+Map.addLayer(image,{'bands': bands_vis, min: [-15, -25, -15],max: [0, -5, 0]},'Sentinel-1 time window 1',true);
+Map.addLayer(image,{'bands': 'VV', min: [-15],max: [0]},'VV',true);
+Map.addLayer(image,{'bands': 'VH', min: [-25],max: [-5]},'VH',true);
+
+// Compute the histogram of the VH band.  The mean and variance are only FYI.
+var histogram = image.select([1]).reduceRegion({
+ reducer: ee.Reducer.histogram(255, 2)
+     .combine('mean', null, true)
+     .combine('variance', null, true),
+ geometry: ROI,
+ scale: 30,
+ bestEffort: true
+});
+print(histogram);
+
+// Chart the histogram
+print(Chart.image.histogram(image.select([1]), ROI, 30));
+
+// Return the DN that maximizes interclass variance in B5 (in the region).
+var otsu = function(histogram) {
+ var counts = ee.Array(ee.Dictionary(histogram).get('histogram'));
+ var means = ee.Array(ee.Dictionary(histogram).get('bucketMeans'));
+ var size = means.length().get([0]);
+ var total = counts.reduce(ee.Reducer.sum(), [0]).get([0]);
+ var sum = means.multiply(counts).reduce(ee.Reducer.sum(), [0]).get([0]);
+ var mean = sum.divide(total);
+ 
+ var indices = ee.List.sequence(1, size);
+ 
+ // Compute between sum of squares, where each mean partitions the data.
+ var bss = indices.map(function(i) {
+   var aCounts = counts.slice(0, 0, i);
+   var aCount = aCounts.reduce(ee.Reducer.sum(), [0]).get([0]);
+   var aMeans = means.slice(0, 0, i);
+   var aMean = aMeans.multiply(aCounts)
+       .reduce(ee.Reducer.sum(), [0]).get([0])
+       .divide(aCount);
+   var bCount = total.subtract(aCount);
+   var bMean = sum.subtract(aCount.multiply(aMean)).divide(bCount);
+   return aCount.multiply(aMean.subtract(mean).pow(2)).add(
+          bCount.multiply(bMean.subtract(mean).pow(2)));
+ });
+ 
+ print(ui.Chart.array.values(ee.Array(bss), 0, means));
+ 
+ // Return the mean value corresponding to the maximum BSS.
+ return means.sort(bss).get([-1]);
+};
+
+var threshold = otsu(histogram.get('VH_histogram'));
+print('threshold', threshold);
+
+var classA = image.select('VH').lt(threshold);
+
+Map.addLayer(classA.mask(classA), {palette: 'blue'}, 'class A');
+
