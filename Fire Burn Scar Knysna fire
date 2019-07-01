@@ -7,7 +7,9 @@ var col = ee.ImageCollection("COPERNICUS/S2")
           .filterBounds(ROI)
           .sort('CLOUD_COVERAGE_ASSESSMENT')
           
-          
+ //Zoom to target location
+Map.centerObject(ROI, 10);
+ 
 var image = ee.Image(col.first());
 print(image);
 
