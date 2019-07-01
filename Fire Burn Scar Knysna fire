@@ -1,0 +1,52 @@
+ var ROI = /* color: #d63000 */ee.Geometry.Point([22.88304818749998, -33.9884771438426]),
+    sent2 = ee.ImageCollection("COPERNICUS/S2_SR");
+    
+//Filter the sentinel 2 image collection, date is 1 month after Knysna Fire
+var col = ee.ImageCollection("COPERNICUS/S2")
+          .filterDate('2018-11-25', '2018-11-30')
+          .filterBounds(ROI)
+          .sort('CLOUD_COVERAGE_ASSESSMENT')
+          
+          
+var image = ee.Image(col.first());
+print(image);
+
+// True colour visualisation
+var trueColour = {
+  bands: ["B4", "B3", "B2"],
+  min: 0,
+  max: 3000        };
+  
+  //add the image to the map , using the visualization parameters.
+  Map.addLayer(image, trueColour, "true-colour image");
+  
+   // False colour visualisation
+  var falseColour = {bands: ["B8", "B4", "B3"],
+  min: 0,
+  max: 3000
+  };
+  
+  // Add the image to the map, using the visualization parameters.
+  Map.addLayer(image, falseColour, "false-color composite");
+  
+   //Define variable NDVI from equation
+  var NDVI = image.expression(
+  "(NIR - RED) / (NIR + RED)",
+  {
+    RED: image.select("B4"),    //  RED
+    NIR: image.select("B8"),    // NIR
+    BLUE: image.select("B2"),    // BLUE
+  });
+  
+ Map.addLayer(NDVI, {min: 0, max: 1}, "NDVI");
+ 
+ // Normalized Difference NIR/SWIR Normalized Burn Ratio (abbrv. NBR)
+// General formula: (NIR - SWIR) / (NIR + SWIR)
+var NBR = image.expression(
+"(NIR - SWIR) / (NIR + SWIR)",
+{
+NIR: image.select("B8"),    // NIR
+SWIR :image.select("B12"),    // SWIR
+});
+
+Map.addLayer(NBR, {min: -1, max: 1}, "NBR"); 
